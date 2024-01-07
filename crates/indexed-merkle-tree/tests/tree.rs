@@ -13,5 +13,6 @@ fn test_tree() {
 
   let tree = IndexedMerkleTree::new(data, KeccakHasher);
   let proof = tree.get_proof(KeccakHasher.hash_leaf(b"hello")).unwrap();
+  println!("proof: {:#?}", proof);
   tree.verify_proof(proof).unwrap();
 }

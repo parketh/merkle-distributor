@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 # Hashing
 sha3 = "0.10"
+hex = "0.4"

@@ -1,6 +1,8 @@
 // Local imports
+use crate::errors::MerkleError;
 use crate::hasher::Hasher;
 use crate::node::Node;
+use crate::proof::MerkleProof;
 
 // Core lib imports
 use std::collections::HashMap;
@@ -12,21 +14,6 @@ pub struct IndexedMerkleTree<H: Hasher> {
   pub height: usize,
   pub indexer: HashMap<[u8; 32], usize>, // key -> index position in `leaves`
   hasher: H,
-}
-
-#[derive(Debug)]
-pub enum MerkleError {
-  InvalidRootHash { exp: [u8; 32], act: [u8; 32] },
-  InvalidKey { key: [u8; 32] },
-  NodeNotFound { level: usize, index: usize },
-  InvalidDataLength { len: usize },
-}
-
-pub struct MerkleProof {
-  pub data: Vec<u8>,
-  pub index: usize,
-  pub proof: Vec<[u8; 32]>,
-  pub root_hash: [u8; 32],
 }
 
 impl<H: Hasher> IndexedMerkleTree<H> {
