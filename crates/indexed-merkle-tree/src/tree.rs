@@ -1,29 +1,29 @@
 // Local imports
 use crate::errors::MerkleError;
 use crate::hasher::Hasher;
-use crate::node::Node;
+use crate::node::{Node, SerializableData};
 use crate::proof::MerkleProof;
 
 // Core lib imports
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
-pub struct IndexedMerkleTree<H: Hasher> {
-  pub root: Node,
-  pub leaves: HashMap<(usize, usize), Node>, // (level, index) -> node
+#[derive(Clone)]
+pub struct IndexedMerkleTree<D: SerializableData, H: Hasher> {
+  pub root: Node<D>,
+  pub leaves: HashMap<(usize, usize), Node<D>>, // (level, index) -> node
   pub height: usize,
   pub indexer: HashMap<[u8; 32], usize>, // key -> index position in `leaves`
   hasher: H,
 }
 
-impl<H: Hasher> IndexedMerkleTree<H> {
-  pub fn new(data: Vec<Vec<u8>>, hasher: H) -> Self {
+impl<D: SerializableData, H: Hasher> IndexedMerkleTree<D, H> {
+  pub fn new(data: Vec<D>, hasher: H) -> Self {
     let mut indexer: HashMap<[u8; 32], usize> = HashMap::new();
-    let mut leaves: HashMap<(usize, usize), Node> = HashMap::new();
+    let mut leaves: HashMap<(usize, usize), Node<D>> = HashMap::new();
 
     // insert leaves into the tree
     data.iter().enumerate().for_each(|(index, data)| {
-      let hash = hasher.hash_leaf(&data);
+      let hash = hasher.hash_leaf(&data.to_bytes());
 
       leaves.insert(
         (0, index),
@@ -32,7 +32,7 @@ impl<H: Hasher> IndexedMerkleTree<H> {
           data: Some(data.clone()),
         },
       );
-      indexer.insert(hash, index);
+      indexer.insert(data.key(), index);
     });
 
     // pad to next power of two with empty leaves
@@ -48,7 +48,7 @@ impl<H: Hasher> IndexedMerkleTree<H> {
     }
 
     // build the tree by recursively hashing pairs of leaves
-    let (root, height) = build_tree(&data, &mut leaves, &hasher).unwrap();
+    let (root, height) = build_tree(data.len(), &mut leaves, &hasher).unwrap();
 
     Self {
       root,
@@ -59,7 +59,7 @@ impl<H: Hasher> IndexedMerkleTree<H> {
     }
   }
 
-  pub fn get_proof(&self, key: [u8; 32]) -> Result<MerkleProof, MerkleError> {
+  pub fn get_proof(&self, key: [u8; 32]) -> Result<MerkleProof<D>, MerkleError> {
     let target_index = *self
       .indexer
       .get(&key)
@@ -96,8 +96,8 @@ impl<H: Hasher> IndexedMerkleTree<H> {
     })
   }
 
-  pub fn verify_proof(&self, proof: MerkleProof) -> Result<bool, MerkleError> {
-    let mut hash = self.hasher.hash_leaf(&proof.data);
+  pub fn verify_proof(&self, proof: MerkleProof<D>) -> Result<bool, MerkleError> {
+    let mut hash = self.hasher.hash_leaf(&proof.data.to_bytes());
     let mut level = 0;
     let mut index = proof.index;
 
@@ -127,19 +127,44 @@ impl<H: Hasher> IndexedMerkleTree<H> {
   }
 }
 
-fn build_tree<H: Hasher>(
-  data: &[Vec<u8>],
-  leaves: &mut HashMap<(usize, usize), Node>,
+impl<D: SerializableData, H: Hasher> std::fmt::Debug for IndexedMerkleTree<D, H> {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    f.debug_struct("IndexedMerkleTree")
+      .field("root", &format!("0x{}", hex::encode(self.root.hash)))
+      .field(
+        "leaves",
+        &self
+          .leaves
+          .iter()
+          .map(|((level, index), _node)| format!("({},{})", level, index))
+          .collect::<Vec<_>>(),
+      )
+      .field("height", &self.height)
+      .field(
+        "indexer",
+        &self
+          .indexer
+          .iter()
+          .map(|(key, value)| format!("0x{} -> {}", hex::encode(key), value))
+          .collect::<Vec<_>>(),
+      )
+      .finish()
+  }
+}
+
+fn build_tree<H: Hasher, D: SerializableData>(
+  data_len: usize,
+  leaves: &mut HashMap<(usize, usize), Node<D>>,
   hasher: &H,
-) -> Result<(Node, usize), MerkleError> {
-  if data.len() < 2 {
-    return Err(MerkleError::InvalidDataLength { len: data.len() });
+) -> Result<(Node<D>, usize), MerkleError> {
+  if data_len < 2 {
+    return Err(MerkleError::InvalidDataLength { len: data_len });
   }
 
   let mut level = 1; // skip level 0 (leaves)
   let mut index = 0;
-  let mut max_index = data.len().next_power_of_two() / 2 - 1;
-  let height = data.len().next_power_of_two().ilog2() as usize;
+  let mut max_index = data_len.next_power_of_two() / 2 - 1;
+  let height = data_len.next_power_of_two().ilog2() as usize;
 
   while level <= height {
     while index <= max_index {

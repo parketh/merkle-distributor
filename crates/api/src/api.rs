@@ -1,7 +1,9 @@
-pub mod endpoints;
+// Local imports
+use api::data_parser::{parse_data, DistributionEntry};
+use api::endpoints::{status, ApiDoc};
+use indexed_merkle_tree::{hasher::KeccakHasher, tree::IndexedMerkleTree};
 
-use crate::endpoints::{status, ApiDoc};
-
+// External imports
 use actix_web::{middleware::Logger, App, HttpServer};
 use env_logger::Env;
 use utoipa::OpenApi;
@@ -9,6 +11,14 @@ use utoipa_swagger_ui::SwaggerUi;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+  // parse distribution data
+  let data = parse_data();
+  println!("data: {:?}", data);
+
+  // build merkle tree
+  let tree = IndexedMerkleTree::<DistributionEntry, KeccakHasher>::new(data, KeccakHasher);
+  println!("tree: {:#?}", tree);
+
   // set log level
   env_logger::init_from_env(Env::default().default_filter_or("info"));
 
