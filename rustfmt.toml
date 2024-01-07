@@ -1,0 +1,46 @@
+# Rustfmt configuration
+# See all options: https://rust-lang.github.io/rustfmt/
+
+# Edition
+edition = "2021"
+
+# Indentation
+tab_spaces = 2
+
+# Line width
+max_width = 100
+
+# Imports
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+
+# Formatting style
+newline_style = "Unix"
+use_small_heuristics = "Default"
+
+# Chains
+chain_width = 60
+
+# Comments
+normalize_comments = true
+wrap_comments = true
+comment_width = 80
+
+# Functions
+fn_single_line = false
+where_single_line = false
+
+# Structs and enums
+struct_lit_single_line = false
+enum_discrim_align_threshold = 0
+
+# Match arms
+match_arm_blocks = true
+match_block_trailing_comma = false
+
+# Control flow
+control_brace_style = "AlwaysSameLine"
+
+# Trailing comma
+trailing_comma = "Vertical"
+trailing_semicolon = true

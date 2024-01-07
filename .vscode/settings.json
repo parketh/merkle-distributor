@@ -1,0 +1,18 @@
+{
+  // Format on save
+  "editor.formatOnSave": true,
+
+  // Use rust-analyzer's formatter (rustfmt)
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.formatOnSave": true
+  },
+
+  // Rustfmt configuration
+  "rust-analyzer.rustfmt.extraArgs": [],
+
+  // Optional: Auto-fix on save
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit"
+  }
+}
