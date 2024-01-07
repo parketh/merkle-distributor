@@ -136,7 +136,9 @@ impl<D: SerializableData, H: Hasher> std::fmt::Debug for IndexedMerkleTree<D, H>
         &self
           .leaves
           .iter()
-          .map(|((level, index), _node)| format!("({},{})", level, index))
+          .map(|((level, index), node)| {
+            format!("({},{}) -> 0x{}", level, index, hex::encode(node.hash))
+          })
           .collect::<Vec<_>>(),
       )
       .field("height", &self.height)

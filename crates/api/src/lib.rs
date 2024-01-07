@@ -7,4 +7,5 @@ use indexed_merkle_tree::{hasher::KeccakHasher, tree::IndexedMerkleTree};
 // Application state containing the merkle tree
 pub struct AppState {
   pub tree: IndexedMerkleTree<DistributionEntry, KeccakHasher>,
+  pub total_amount: String,
 }

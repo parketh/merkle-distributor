@@ -1,18 +1,21 @@
 // Local imports
 use crate::AppState;
+use indexed_merkle_tree::hasher::{Hasher, KeccakHasher};
 
 // Core lib imports
 use std::sync::Arc;
 
 // External imports
 use actix_web::{get, web, HttpResponse, Responder};
-use utoipa::OpenApi;
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, OpenApi};
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
       status,
-      get_root
+      get_info,
+      get_proof
     ),
     tags(
         (name = "Merkle distributor API", description = "API to request Merkle proofs for reward distribution.")
@@ -34,14 +37,59 @@ async fn status() -> impl Responder {
 
 #[utoipa::path(
   get,
-  path = "/get-root",
+  path = "/info",
   responses(
-    (status = 200, description = "Root hash of the Merkle tree"),
+    (status = 200, description = "Return the total amount of rewards and Merkle root hash"),
   )
 )]
-#[get("/get-root")]
-async fn get_root(app_state: web::Data<Arc<AppState>>) -> impl Responder {
+#[get("/info")]
+async fn get_info(app_state: web::Data<Arc<AppState>>) -> impl Responder {
   let root_hash = app_state.tree.root.hash;
-  let encoded = hex::encode(root_hash);
-  HttpResponse::Ok().body(format!("0x{}", encoded))
+  HttpResponse::Ok().json(serde_json::json!({
+    "total_amount": app_state.total_amount,
+    "root_hash": format!("0x{}", hex::encode(root_hash)),
+  }))
+}
+
+#[derive(Deserialize, IntoParams)]
+struct ProofQuery {
+  address: String,
+}
+
+#[derive(Serialize)]
+struct ProofResponse {
+  amount: String,
+  proof: Vec<String>,
+}
+
+#[utoipa::path(
+  get,
+  path = "/proof",
+  params(
+    ProofQuery
+  ),
+  responses(
+    (status = 200, description = "Request Merkle proof for a given address"),
+  )
+)]
+#[get("/proof")]
+async fn get_proof(
+  app_state: web::Data<Arc<AppState>>,
+  query: web::Query<ProofQuery>,
+) -> impl Responder {
+  let key = KeccakHasher.hash_leaf(&query.address.as_bytes());
+  match app_state.tree.get_proof(key) {
+    Ok(proof) => {
+      let formatted = ProofResponse {
+        amount: proof.data.amount,
+        proof: proof
+          .proof
+          .iter()
+          .map(|h| format!("0x{}", hex::encode(h)))
+          .collect(),
+      };
+      HttpResponse::Ok().json(serde_json::json!(formatted))
+    }
+    _ => HttpResponse::InternalServerError().body("Failed to get proof for address."),
+  }
 }

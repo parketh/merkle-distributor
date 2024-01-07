@@ -1,6 +1,6 @@
 // Local imports
 use api::data_parser::{parse_data, DistributionEntry};
-use api::endpoints::{get_root, status, ApiDoc};
+use api::endpoints::{get_info, get_proof, status, ApiDoc};
 use api::AppState;
 use indexed_merkle_tree::{hasher::KeccakHasher, tree::IndexedMerkleTree};
 
@@ -16,14 +16,14 @@ use utoipa_swagger_ui::SwaggerUi;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
   // parse distribution data
-  let data = parse_data();
+  let (data, total_amount) = parse_data();
 
   // build merkle tree
   let tree = IndexedMerkleTree::<DistributionEntry, KeccakHasher>::new(data, KeccakHasher);
   println!("tree: {:#?}", tree);
 
   // wrap in Arc for thread-safe shared access
-  let app_state = Arc::new(AppState { tree });
+  let app_state = Arc::new(AppState { tree, total_amount });
 
   // set log level
   env_logger::init_from_env(Env::default().default_filter_or("info"));
@@ -34,7 +34,8 @@ async fn main() -> std::io::Result<()> {
       .wrap(Logger::default())
       .wrap(Logger::new("%a %{User-Agent}i"))
       .service(status)
-      .service(get_root)
+      .service(get_info)
+      .service(get_proof)
       .service(
         SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", ApiDoc::openapi()),
       )

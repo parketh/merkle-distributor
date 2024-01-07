@@ -3,7 +3,9 @@ use crate::node::SerializableData;
 
 // External imports
 use hex;
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct MerkleProof<D: SerializableData> {
   pub data: D,
   pub index: usize,
