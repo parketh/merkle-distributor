@@ -97,7 +97,7 @@ impl<H: Hasher> IndexedMerkleTree<H> {
     let mut index = proof.index;
 
     for sibling_hash in proof.proof {
-      hash = if proof.index % 2 == 0 {
+      hash = if index % 2 == 0 {
         self.hasher.hash_internal(&hash, &sibling_hash)
       } else {
         self.hasher.hash_internal(&sibling_hash, &hash)
@@ -107,11 +107,6 @@ impl<H: Hasher> IndexedMerkleTree<H> {
 
     Ok(hash == proof.root_hash && hash == self.root.hash)
   }
-
-  pub fn num_leaves(&self) -> usize {
-    self.leaves.len()
-  }
-
 }
 
 fn build_tree<H: Hasher>(data: &[Vec<u8>], leaves: &mut HashMap<(usize, usize), Node>, hasher: &H) -> Result<(Node, usize), MerkleProofError> {
