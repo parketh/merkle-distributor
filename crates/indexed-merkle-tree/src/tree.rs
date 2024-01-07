@@ -1,0 +1,162 @@
+// Local imports
+use crate::node::Node;
+use crate::hasher::Hasher;
+
+// Core lib imports
+use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
+pub struct IndexedMerkleTree<H: Hasher> {
+    pub root: Node,
+    pub leaves: HashMap<(usize, usize), Node>, // (level, index) -> node
+    pub height: usize,
+    pub indexer: HashMap<[u8; 32], usize>, // key -> index position in `leaves`
+    hasher: H,
+}
+
+#[derive(Debug)]
+pub enum MerkleProofError {
+  InvalidRootHash,
+  InvalidKey,
+  NodeNotFound,
+  InvalidDataLength,
+  BuildTreeError,
+}
+
+pub struct MerkleProof {
+  pub data: Vec<u8>,
+  pub index: usize,
+  pub proof: Vec<[u8; 32]>,
+  pub root_hash: [u8; 32],
+}
+
+impl<H: Hasher> IndexedMerkleTree<H> {
+  pub fn new(data: Vec<Vec<u8>>, hasher: H) -> Self {
+    let mut indexer: HashMap<[u8; 32], usize> = HashMap::new();
+    let mut leaves: HashMap<(usize, usize), Node> = HashMap::new();
+
+    // insert leaves into the tree
+    data.iter().enumerate().for_each(|(index, data)| {
+      let hash = hasher.hash_leaf(&data);
+
+      leaves.insert((0, index), Node {
+        hash,
+        data: Some(data.clone()),
+      });
+      indexer.insert(hash, index);
+    });
+
+    // pad to next power of two with empty leaves
+    let padding_count = data.len().next_power_of_two() - data.len();
+    for i in 0..padding_count {
+      leaves.insert((0, data.len() + i), Node {
+        hash: H::zero(),
+        data: None,
+      });
+    }
+
+    // build the tree by recursively hashing pairs of leaves
+    let (root, height) = build_tree(&data, &mut leaves, &hasher).unwrap();
+
+    Self {
+      root,
+      leaves,
+      height,
+      indexer,
+      hasher,
+    }
+  }
+
+  pub fn get_proof(&self, key: [u8; 32]) -> Result<MerkleProof, MerkleProofError> {
+    let target_index = *self.indexer.get(&key).ok_or(MerkleProofError::InvalidKey)?;
+    let mut index = target_index;
+    let target_node = self.leaves.get(&(0, index)).ok_or(MerkleProofError::NodeNotFound)?;
+
+    // tree starts bottom up at level 0 (leaves) and goes up to the root (level `height - 1`)
+    let mut proof = Vec::new();
+    let mut level = 0;
+
+    while level < self.height {
+      let sibling_index = get_sibling_node(index);
+      let sibling_node = self.leaves.get(&(level, sibling_index)).ok_or(MerkleProofError::NodeNotFound)?;
+      proof.push(sibling_node.hash);
+      (level, index) = get_parent_node(level, index);
+    }
+
+    Ok(MerkleProof {
+      data: target_node.data.clone().unwrap(),
+      index: target_index,
+      proof,
+      root_hash: self.root.hash,
+    })
+  }
+
+  pub fn verify_proof(&self, proof: MerkleProof) -> Result<bool, MerkleProofError> {
+    let mut hash = self.hasher.hash_leaf(&proof.data);
+    let mut level = 0;
+    let mut index = proof.index;
+
+    for sibling_hash in proof.proof {
+      hash = if proof.index % 2 == 0 {
+        self.hasher.hash_internal(&hash, &sibling_hash)
+      } else {
+        self.hasher.hash_internal(&sibling_hash, &hash)
+      };
+      (level, index) = get_parent_node(level, index);
+    }
+
+    Ok(hash == proof.root_hash && hash == self.root.hash)
+  }
+
+  pub fn num_leaves(&self) -> usize {
+    self.leaves.len()
+  }
+
+}
+
+fn build_tree<H: Hasher>(data: &[Vec<u8>], leaves: &mut HashMap<(usize, usize), Node>, hasher: &H) -> Result<(Node, usize), MerkleProofError> {
+  if data.len() < 2 {
+    return Err(MerkleProofError::InvalidDataLength);
+  }
+
+  let mut level = 1; // skip level 0 (leaves)
+  let mut index = 0;
+  let mut max_index = data.len().next_power_of_two() - 1;
+  let height = data.len().next_power_of_two().ilog2() as usize;
+
+  while level <= height {
+    while index <= max_index {
+      let left_node = get_left_node(level, index);
+      let right_node = get_right_node(level, index);
+      let left_hash = leaves.get(&left_node).unwrap().hash;
+      let right_hash = leaves.get(&right_node).unwrap().hash;
+      let hash = hasher.hash_internal(&left_hash, &right_hash);
+      leaves.insert((level, index), Node { hash, data: None });
+      index += 1;
+    }
+    level += 1;
+    index = 0;
+    max_index = max_index / 2;
+  }
+
+  // get root node
+  let root = leaves.get(&(height, 0)).ok_or(MerkleProofError::BuildTreeError)?.clone();
+
+  Ok((root, height))
+}
+
+fn get_parent_node(level: usize, index: usize) -> (usize, usize) {
+  (level + 1, index / 2)
+}
+
+fn get_sibling_node(index: usize) -> usize {
+  index ^ 1
+}
+
+fn get_left_node(level: usize, index: usize) -> (usize, usize) {
+  (level - 1, index * 2)
+}
+
+fn get_right_node(level: usize, index: usize) -> (usize, usize) {
+  (level - 1, index * 2 + 1)
+}
