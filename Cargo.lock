@@ -271,6 +271,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "env_logger",
+ "hex",
  "indexed-merkle-tree",
  "primitive-types",
  "serde",

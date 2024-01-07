@@ -76,10 +76,14 @@ pub fn parse_data() -> Vec<DistributionEntry> {
   }
 
   // convert hashmap to vec
-  entries
-    .into_iter()
-    .map(|(address, amount)| DistributionEntry { address, amount })
-    .collect()
+  let mut result: Vec<DistributionEntry> = entries
+  .into_iter()
+  .map(|(address, amount)| DistributionEntry { address, amount })
+  .collect();
+  // sort by address for deterministic ordering
+  result.sort_by(|a, b| a.address.cmp(&b.address));
+
+  result
 }
 
 fn gather_json_files(path: &str) -> Vec<String> {
