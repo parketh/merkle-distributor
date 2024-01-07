@@ -1,5 +1,4 @@
-use light_poseidon::{Poseidon, PoseidonBytesHasher};
-use ark_bn254::Fr;
+use sha3::{Digest, Keccak256};
 
 pub trait Hasher {
   fn hash_leaf(&self, data: &[u8]) -> [u8; 32];
@@ -7,19 +6,20 @@ pub trait Hasher {
   fn zero() -> [u8; 32];
 }
 
-pub struct PoseidonHasher;
+pub struct KeccakHasher;
 
-impl Hasher for PoseidonHasher {
+impl Hasher for KeccakHasher {
   fn hash_leaf(&self, data: &[u8]) -> [u8; 32] {
-    let mut poseidon = Poseidon::<Fr>::new_circom(2).unwrap();
-
-    poseidon.hash_bytes_be(&[data]).unwrap()
+    let mut hasher = Keccak256::new();
+    hasher.update(data);
+    hasher.finalize().into()
   }
 
   fn hash_internal(&self, left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
-    let mut poseidon = Poseidon::<Fr>::new_circom(2).unwrap();
-
-    poseidon.hash_bytes_be(&[left, right]).unwrap()
+    let mut hasher = Keccak256::new();
+    hasher.update(left);
+    hasher.update(right);
+    hasher.finalize().into()
   }
 
   fn zero() -> [u8; 32] {

@@ -1,17 +1,17 @@
 // Local imports
-use crate::node::Node;
 use crate::hasher::Hasher;
+use crate::node::Node;
 
 // Core lib imports
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct IndexedMerkleTree<H: Hasher> {
-    pub root: Node,
-    pub leaves: HashMap<(usize, usize), Node>, // (level, index) -> node
-    pub height: usize,
-    pub indexer: HashMap<[u8; 32], usize>, // key -> index position in `leaves`
-    hasher: H,
+  pub root: Node,
+  pub leaves: HashMap<(usize, usize), Node>, // (level, index) -> node
+  pub height: usize,
+  pub indexer: HashMap<[u8; 32], usize>, // key -> index position in `leaves`
+  hasher: H,
 }
 
 #[derive(Debug)]
@@ -39,20 +39,26 @@ impl<H: Hasher> IndexedMerkleTree<H> {
     data.iter().enumerate().for_each(|(index, data)| {
       let hash = hasher.hash_leaf(&data);
 
-      leaves.insert((0, index), Node {
-        hash,
-        data: Some(data.clone()),
-      });
+      leaves.insert(
+        (0, index),
+        Node {
+          hash,
+          data: Some(data.clone()),
+        },
+      );
       indexer.insert(hash, index);
     });
 
     // pad to next power of two with empty leaves
     let padding_count = data.len().next_power_of_two() - data.len();
     for i in 0..padding_count {
-      leaves.insert((0, data.len() + i), Node {
-        hash: H::zero(),
-        data: None,
-      });
+      leaves.insert(
+        (0, data.len() + i),
+        Node {
+          hash: H::zero(),
+          data: None,
+        },
+      );
     }
 
     // build the tree by recursively hashing pairs of leaves
@@ -70,7 +76,10 @@ impl<H: Hasher> IndexedMerkleTree<H> {
   pub fn get_proof(&self, key: [u8; 32]) -> Result<MerkleProof, MerkleProofError> {
     let target_index = *self.indexer.get(&key).ok_or(MerkleProofError::InvalidKey)?;
     let mut index = target_index;
-    let target_node = self.leaves.get(&(0, index)).ok_or(MerkleProofError::NodeNotFound)?;
+    let target_node = self
+      .leaves
+      .get(&(0, index))
+      .ok_or(MerkleProofError::NodeNotFound)?;
 
     // tree starts bottom up at level 0 (leaves) and goes up to the root (level `height - 1`)
     let mut proof = Vec::new();
@@ -78,7 +87,10 @@ impl<H: Hasher> IndexedMerkleTree<H> {
 
     while level < self.height {
       let sibling_index = get_sibling_node(index);
-      let sibling_node = self.leaves.get(&(level, sibling_index)).ok_or(MerkleProofError::NodeNotFound)?;
+      let sibling_node = self
+        .leaves
+        .get(&(level, sibling_index))
+        .ok_or(MerkleProofError::NodeNotFound)?;
       proof.push(sibling_node.hash);
       (level, index) = get_parent_node(level, index);
     }
@@ -109,14 +121,18 @@ impl<H: Hasher> IndexedMerkleTree<H> {
   }
 }
 
-fn build_tree<H: Hasher>(data: &[Vec<u8>], leaves: &mut HashMap<(usize, usize), Node>, hasher: &H) -> Result<(Node, usize), MerkleProofError> {
+fn build_tree<H: Hasher>(
+  data: &[Vec<u8>],
+  leaves: &mut HashMap<(usize, usize), Node>,
+  hasher: &H,
+) -> Result<(Node, usize), MerkleProofError> {
   if data.len() < 2 {
     return Err(MerkleProofError::InvalidDataLength);
   }
 
   let mut level = 1; // skip level 0 (leaves)
   let mut index = 0;
-  let mut max_index = data.len().next_power_of_two() - 1;
+  let mut max_index = data.len().next_power_of_two() / 2 - 1;
   let height = data.len().next_power_of_two().ilog2() as usize;
 
   while level <= height {
@@ -135,7 +151,10 @@ fn build_tree<H: Hasher>(data: &[Vec<u8>], leaves: &mut HashMap<(usize, usize), 
   }
 
   // get root node
-  let root = leaves.get(&(height, 0)).ok_or(MerkleProofError::BuildTreeError)?.clone();
+  let root = leaves
+    .get(&(height, 0))
+    .ok_or(MerkleProofError::BuildTreeError)?
+    .clone();
 
   Ok((root, height))
 }
