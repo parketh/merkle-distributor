@@ -15,12 +15,11 @@ pub struct IndexedMerkleTree<H: Hasher> {
 }
 
 #[derive(Debug)]
-pub enum MerkleProofError {
-  InvalidRootHash,
-  InvalidKey,
-  NodeNotFound,
-  InvalidDataLength,
-  BuildTreeError,
+pub enum MerkleError {
+  InvalidRootHash { exp: [u8; 32], act: [u8; 32] },
+  InvalidKey { key: [u8; 32] },
+  NodeNotFound { level: usize, index: usize },
+  InvalidDataLength { len: usize },
 }
 
 pub struct MerkleProof {
@@ -73,13 +72,16 @@ impl<H: Hasher> IndexedMerkleTree<H> {
     }
   }
 
-  pub fn get_proof(&self, key: [u8; 32]) -> Result<MerkleProof, MerkleProofError> {
-    let target_index = *self.indexer.get(&key).ok_or(MerkleProofError::InvalidKey)?;
+  pub fn get_proof(&self, key: [u8; 32]) -> Result<MerkleProof, MerkleError> {
+    let target_index = *self
+      .indexer
+      .get(&key)
+      .ok_or(MerkleError::InvalidKey { key })?;
     let mut index = target_index;
     let target_node = self
       .leaves
       .get(&(0, index))
-      .ok_or(MerkleProofError::NodeNotFound)?;
+      .ok_or(MerkleError::NodeNotFound { level: 0, index })?;
 
     // tree starts bottom up at level 0 (leaves) and goes up to the root (level `height - 1`)
     let mut proof = Vec::new();
@@ -87,10 +89,14 @@ impl<H: Hasher> IndexedMerkleTree<H> {
 
     while level < self.height {
       let sibling_index = get_sibling_node(index);
-      let sibling_node = self
-        .leaves
-        .get(&(level, sibling_index))
-        .ok_or(MerkleProofError::NodeNotFound)?;
+      let sibling_node =
+        self
+          .leaves
+          .get(&(level, sibling_index))
+          .ok_or(MerkleError::NodeNotFound {
+            level,
+            index: sibling_index,
+          })?;
       proof.push(sibling_node.hash);
       (level, index) = get_parent_node(level, index);
     }
@@ -103,7 +109,7 @@ impl<H: Hasher> IndexedMerkleTree<H> {
     })
   }
 
-  pub fn verify_proof(&self, proof: MerkleProof) -> Result<bool, MerkleProofError> {
+  pub fn verify_proof(&self, proof: MerkleProof) -> Result<bool, MerkleError> {
     let mut hash = self.hasher.hash_leaf(&proof.data);
     let mut level = 0;
     let mut index = proof.index;
@@ -117,7 +123,20 @@ impl<H: Hasher> IndexedMerkleTree<H> {
       (level, index) = get_parent_node(level, index);
     }
 
-    Ok(hash == proof.root_hash && hash == self.root.hash)
+    if hash != proof.root_hash {
+      return Err(MerkleError::InvalidRootHash {
+        exp: proof.root_hash,
+        act: hash,
+      });
+    }
+    if hash != self.root.hash {
+      return Err(MerkleError::InvalidRootHash {
+        exp: self.root.hash,
+        act: hash,
+      });
+    }
+
+    Ok(true)
   }
 }
 
@@ -125,9 +144,9 @@ fn build_tree<H: Hasher>(
   data: &[Vec<u8>],
   leaves: &mut HashMap<(usize, usize), Node>,
   hasher: &H,
-) -> Result<(Node, usize), MerkleProofError> {
+) -> Result<(Node, usize), MerkleError> {
   if data.len() < 2 {
-    return Err(MerkleProofError::InvalidDataLength);
+    return Err(MerkleError::InvalidDataLength { len: data.len() });
   }
 
   let mut level = 1; // skip level 0 (leaves)
@@ -153,7 +172,10 @@ fn build_tree<H: Hasher>(
   // get root node
   let root = leaves
     .get(&(height, 0))
-    .ok_or(MerkleProofError::BuildTreeError)?
+    .ok_or(MerkleError::NodeNotFound {
+      level: height,
+      index: 0,
+    })?
     .clone();
 
   Ok((root, height))
