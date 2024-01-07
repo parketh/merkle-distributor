@@ -20,7 +20,7 @@ impl SerializableData for TestData {
 }
 
 #[test]
-fn test_tree() {
+fn test_tree_verifies_proof() {
   let data: Vec<TestData> = vec![
     TestData("hello".to_string()),
     TestData("world".to_string()),
@@ -31,6 +31,21 @@ fn test_tree() {
 
   let tree = IndexedMerkleTree::<TestData, KeccakHasher>::new(data, KeccakHasher);
   let proof = tree.get_proof(TestData("hello".to_string()).key()).unwrap();
-  println!("proof: {:#?}", proof);
   tree.verify_proof(proof).unwrap();
+}
+
+#[test]
+fn test_tree_rejects_invalid_proof() {
+  let data: Vec<TestData> = vec![
+    TestData("hello".to_string()),
+    TestData("world".to_string()),
+    TestData("foo".to_string()),
+    TestData("bar".to_string()),
+    TestData("baz".to_string()),
+  ];
+
+  let tree = IndexedMerkleTree::<TestData, KeccakHasher>::new(data, KeccakHasher);
+  let mut proof = tree.get_proof(TestData("hello".to_string()).key()).unwrap();
+  proof.proof[0] = KeccakHasher.hash_leaf(&TestData("random".to_string()).0.as_bytes());
+  tree.verify_proof(proof).expect_err("Invalid proof");
 }
