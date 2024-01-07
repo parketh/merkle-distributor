@@ -20,7 +20,6 @@ async fn main() -> std::io::Result<()> {
 
   // build merkle tree
   let tree = IndexedMerkleTree::<DistributionEntry, KeccakHasher>::new(data, KeccakHasher);
-  println!("tree: {:#?}", tree);
 
   // wrap in Arc for thread-safe shared access
   let app_state = Arc::new(AppState { tree, total_amount });

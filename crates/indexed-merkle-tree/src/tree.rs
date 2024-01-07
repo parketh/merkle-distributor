@@ -90,16 +90,14 @@ impl<D: SerializableData, H: Hasher> IndexedMerkleTree<D, H> {
 
     Ok(MerkleProof {
       data: target_node.data.clone().unwrap(),
-      index: target_index,
       proof,
-      root_hash: self.root.hash,
     })
   }
 
   pub fn verify_proof(&self, proof: MerkleProof<D>) -> Result<bool, MerkleError> {
     let mut hash = self.hasher.hash_leaf(&proof.data.to_bytes());
     let mut level = 0;
-    let mut index = proof.index;
+    let mut index = *self.indexer.get(&proof.data.key()).unwrap();
 
     for sibling_hash in proof.proof {
       hash = if index % 2 == 0 {
@@ -110,12 +108,6 @@ impl<D: SerializableData, H: Hasher> IndexedMerkleTree<D, H> {
       (level, index) = get_parent_node(level, index);
     }
 
-    if hash != proof.root_hash {
-      return Err(MerkleError::InvalidRootHash {
-        exp: proof.root_hash,
-        act: hash,
-      });
-    }
     if hash != self.root.hash {
       return Err(MerkleError::InvalidRootHash {
         exp: self.root.hash,

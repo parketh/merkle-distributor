@@ -1,21 +1,24 @@
 // Local imports
+use crate::data_parser::DistributionEntry;
 use crate::AppState;
 use indexed_merkle_tree::hasher::{Hasher, KeccakHasher};
+use indexed_merkle_tree::proof::MerkleProof;
 
 // Core lib imports
 use std::sync::Arc;
 
 // External imports
-use actix_web::{get, web, HttpResponse, Responder};
+use actix_web::{get, post, web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, OpenApi};
+use utoipa::{IntoParams, OpenApi, ToSchema};
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
       status,
       get_info,
-      get_proof
+      get_proof,
+      verify_proof
     ),
     tags(
         (name = "Merkle distributor API", description = "API to request Merkle proofs for reward distribution.")
@@ -91,5 +94,55 @@ async fn get_proof(
       HttpResponse::Ok().json(serde_json::json!(formatted))
     }
     _ => HttpResponse::InternalServerError().body("Failed to get proof for address."),
+  }
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct VerifyProofQuery {
+  pub address: String,
+  pub amount: String,
+  pub proof: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct VerifyProofResponse {
+  valid: bool,
+}
+
+#[utoipa::path(
+  post,
+  path = "/verify",
+  request_body(
+    content = VerifyProofQuery,
+    content_type = "application/json",
+  ),
+  responses(
+    (status = 200, description = "Verify Merkle proof for a given address and amount"),
+  )
+)]
+#[post("/verify")]
+async fn verify_proof(
+  app_state: web::Data<Arc<AppState>>,
+  body: web::Json<VerifyProofQuery>,
+) -> impl Responder {
+  let proof: MerkleProof<DistributionEntry> = MerkleProof {
+    data: DistributionEntry {
+      address: body.address.clone(),
+      amount: body.amount.clone(),
+    },
+    proof: body
+      .proof
+      .iter()
+      .map(|h| {
+        let bytes = hex::decode(h.trim_start_matches("0x")).unwrap();
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&bytes[..32]);
+        arr
+      })
+      .collect(),
+  };
+  match app_state.tree.verify_proof(proof) {
+    Ok(valid) => HttpResponse::Ok().json(VerifyProofResponse { valid }),
+    _ => HttpResponse::InternalServerError().body("Failed to verify proof."),
   }
 }
